@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sınav Kağıdı Kapağı Sistemi</title>
+    <!-- Sayfa başlığı artık JavaScript ile dinamik olarak güncellenecek -->
+    <title id="sayfaBasligi">Sınav Kağıdı Kapağı Sistemi</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -11,13 +12,25 @@
            GENEL VE CANLI ÖNİZLEME TASARIMI (Ekranda görünen kısım)
            ========================================================== */
            
+        /* Üst Paneli Sayfaya Sabitleme (Sticky) Özelliği */
+        .sabit-panel {
+            position: sticky;
+            top: 0;
+            z-index: 50; /* Diğer her şeyin üstünde kalsın */
+            background-color: #f3f4f6; /* Sayfa arka plan rengiyle aynı */
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
         /* A4 Kağıdı Önizleme Efekti */
         .a4-sayfa {
             width: 210mm;
             height: 297mm;
-            margin: 0 auto 2rem auto; /* Ekranda ortala ve alt boşluk bırak */
+            margin: 0 auto 2rem auto; 
             background-color: white;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15); /* Kağıt Gölgelendirmesi */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
             display: flex;
             flex-direction: column;
             box-sizing: border-box;
@@ -51,7 +64,6 @@
             color: black;
         }
 
-        /* Gri Arka Planlar (Renklerin yazıcıda basılmasını zorla) */
         .bg-gri {
             background-color: #d9d9d9 !important;
             -webkit-print-color-adjust: exact !important;
@@ -91,7 +103,6 @@
             line-height: 1.1;
         }
 
-        /* Sütun Genişlikleri */
         .sutun-sno { width: 6%; font-size: 13px; }
         .sutun-ono { width: 10%; font-size: 13px;}
         .sutun-adi { width: 34%; text-align: left !important; padding-left: 8px !important; }
@@ -104,7 +115,6 @@
             
             body { background: white; margin: 0; padding: 0; }
             
-            /* Her şeyi gizle, sadece yazdırılacak alanı göster */
             body * { visibility: hidden; }
             #printArea, #printArea * { visibility: visible; }
             
@@ -119,7 +129,6 @@
             
             .no-print { display: none !important; }
 
-            /* Yazıcıda kağıt gölgesini ve kenar boşluğunu kaldır */
             .a4-sayfa {
                 margin: 0;
                 box-shadow: none;
@@ -128,23 +137,40 @@
         }
     </style>
 </head>
-<body class="bg-gray-200 p-6 font-sans">
+<body class="bg-gray-200 font-sans">
 
-    <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow-lg no-print relative mb-8">
-        
-        <!-- ÜST BİLGİ VE YÖNETİCİ BUTONU -->
-        <div class="flex justify-between items-center mb-6 border-b pb-4">
-            <h1 class="text-2xl font-bold text-blue-600">Yazılı Kapağı Otomasyonu</h1>
-            <div>
-                <button id="btnAdminGiris" onclick="adminGiris()" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 font-semibold py-1.5 px-4 rounded text-sm transition shadow-sm">Yönetici Girişi</button>
-                <button id="btnAdminCikis" onclick="adminCikis()" class="hidden bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 font-semibold py-1.5 px-4 rounded text-sm transition shadow-sm">Güvenli Çıkış</button>
+    <!-- SABİT KONTROL PANELİ (SAYFAYLA KAYACAK ALAN) -->
+    <div class="sabit-panel px-6 no-print">
+        <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow-lg">
+            
+            <div class="flex justify-between items-center mb-6 border-b pb-4">
+                <h1 class="text-2xl font-bold text-blue-600">Yazılı Kapağı Otomasyonu</h1>
+                <div>
+                    <button id="btnAdminGiris" onclick="adminGiris()" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 font-semibold py-1.5 px-4 rounded text-sm transition shadow-sm">Yönetici Girişi</button>
+                    <button id="btnAdminCikis" onclick="adminCikis()" class="hidden bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 font-semibold py-1.5 px-4 rounded text-sm transition shadow-sm">Güvenli Çıkış</button>
+                </div>
             </div>
-        </div>
 
+            <!-- HERKESE AÇIK (PUBLIC) YAZDIRMA BÖLÜMÜ -->
+            <div class="border border-blue-200 p-6 rounded-lg bg-blue-50 shadow-sm">
+                <h2 class="text-xl font-bold mb-2 text-blue-800">Sınav Kağıdı Kapağı Yazdırma Paneli</h2>
+                <p class="text-sm text-blue-600 mb-5">Lütfen çıktı almak istediğiniz dersi seçin ve <b>Kapakları Hazırla</b> butonuna basın.</p>
+                <div class="flex gap-4">
+                    <select id="yazdirDers" class="border border-blue-300 p-3 w-full rounded font-semibold text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"><option value="">Ders Seçiniz...</option></select>
+                    <button onclick="kapaklariHazirla()" class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded font-bold whitespace-nowrap shadow-md transition">Kapakları Hazırla / Önizle</button>
+                    <button onclick="yazdirVeBaslikGuncelle()" class="bg-gray-800 hover:bg-gray-900 text-white px-8 py-3 rounded font-bold shadow-md transition">Yazdır</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- NORMAL SAYFA İÇERİĞİ -->
+    <div class="max-w-4xl mx-auto px-6 mt-4 no-print">
         <!-- ========================================== -->
         <!-- YÖNETİCİ (ADMIN) BÖLÜMÜ (Başlangıçta Gizli) -->
         <!-- ========================================== -->
-        <div id="adminPanelleri" class="hidden">
+        <div id="adminPanelleri" class="hidden bg-white p-6 rounded shadow-lg mb-8">
             
             <div class="bg-red-50 text-red-600 text-xs font-bold p-3 mb-6 rounded text-center border border-red-200 shadow-inner">
                 ⚠️ Yetkili Yönetici Modundasınız. Yaptığınız tüm ekleme/silme işlemleri doğrudan veritabanına kaydedilir.
@@ -259,26 +285,12 @@
                 </div>
             </div>
             
-            <hr class="my-8 border-gray-300 border-dashed">
         </div>
         <!-- YÖNETİCİ BÖLÜMÜ BİTİŞ -->
-
-        <!-- ========================================== -->
-        <!-- HERKESE AÇIK (PUBLIC) YAZDIRMA BÖLÜMÜ -->
-        <!-- ========================================== -->
-        <div class="border border-blue-200 p-6 rounded-lg bg-blue-50 shadow-md">
-            <h2 class="text-xl font-bold mb-2 text-blue-800">Sınav Kağıdı Kapağı Yazdırma Paneli</h2>
-            <p class="text-sm text-blue-600 mb-5">Lütfen çıktı almak istediğiniz dersi seçin ve <b>Kapakları Hazırla</b> butonuna basın.</p>
-            <div class="flex gap-4">
-                <select id="yazdirDers" class="border border-blue-300 p-3 w-full rounded font-semibold text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"><option value="">Ders Seçiniz...</option></select>
-                <button onclick="kapaklariHazirla()" class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded font-bold whitespace-nowrap shadow-md transition">Kapakları Hazırla / Önizle</button>
-                <button onclick="window.print()" class="bg-gray-800 hover:bg-gray-900 text-white px-8 py-3 rounded font-bold shadow-md transition">Yazdır</button>
-            </div>
-        </div>
     </div>
 
     <!-- Yazdırılacak Alan (Önizleme İçin Ortalı) -->
-    <div id="printArea" class="flex flex-col items-center pb-12 w-full"></div>
+    <div id="printArea" class="flex flex-col items-center pt-4 pb-12 w-full relative z-10"></div>
 
     <script>
         // ==========================================
@@ -300,7 +312,6 @@
             await verileriDoldur(); 
         }
 
-        // --- YÖNETİCİ GİRİŞ/ÇIKIŞ İŞLEMLERİ ---
         function adminGiris() {
             const girilenSifre = prompt("Lütfen yönetici şifresini giriniz:");
             if (girilenSifre === ADMIN_SIFRESI) {
@@ -335,6 +346,10 @@
             styleTag.innerHTML = `
                 .ders-isim { font-size: ${dersBoyut}px !important; font-weight: ${dersKalinlik} !important; }
                 .alt-baslik { font-size: ${sinifBoyut}px !important; font-weight: ${sinifKalinlik} !important; }
+                @media print {
+                    .ders-isim { font-size: ${dersBoyut}px !important; font-weight: ${dersKalinlik} !important; }
+                    .alt-baslik { font-size: ${sinifBoyut}px !important; font-weight: ${sinifKalinlik} !important; }
+                }
             `;
         }
 
@@ -598,10 +613,42 @@
             
             printArea.innerHTML = sayfaHtml;
             
-            // Kullanıcıyı önizlemeyi görmesi için sayfanın altına kaydır
+            // Eğer yönetici panelleri açıksa, kullanıcının kapakları rahatça görmesi için biraz aşağı kaydır
+            const adminPaneli = document.getElementById('adminPanelleri');
+            if(!adminPaneli.classList.contains('hidden')) {
+                window.scrollTo({ top: adminPaneli.offsetTop + adminPaneli.offsetHeight - 50, behavior: 'smooth' });
+            }
+        }
+        
+        // YAZDIR BUTONUNA BASILDIĞINDA ÇALIŞACAK ÖZEL FONKSİYON (PDF İSİMLENDİRME İÇİN)
+        async function yazdirVeBaslikGuncelle() {
+            const dersSelect = document.getElementById('yazdirDers');
+            const seciliDersId = dersSelect.value;
+            
+            if(!seciliDersId) {
+                alert("Lütfen önce bir ders seçin!");
+                return;
+            }
+            
+            // Seçili dersin adını al (Dropdown menüsündeki görünen metin)
+            const dersAdi = dersSelect.options[dersSelect.selectedIndex].text;
+            
+            // Eğer ekranda henüz kapaklar hazırlanmamışsa (printArea boşsa), önce kapakları hazırla
+            const printArea = document.getElementById('printArea');
+            if (printArea.innerHTML.trim() === '') {
+                await kapaklariHazirla();
+            }
+            
+            // Tarayıcının sekme başlığını seçili ders adı ile değiştir (PDF adı bu olacak)
+            document.getElementById('sayfaBasligi').innerText = dersAdi + " - Sınav Kapakları";
+            
+            // Yazdırma diyaloğunu çağır
+            window.print();
+            
+            // Yazdırma işlemi bittikten hemen sonra sekme adını eski haline döndür
             setTimeout(() => {
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            }, 300);
+                document.getElementById('sayfaBasligi').innerText = "Sınav Kağıdı Kapağı Sistemi";
+            }, 1000);
         }
 
         window.onload = init;

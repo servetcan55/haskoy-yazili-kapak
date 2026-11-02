@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sınav Kağıdı Kapağı Sistemi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* ==========================================================
+           GENEL VE CANLI ÖNİZLEME TASARIMI (Ekranda görünen kısım)
+           ========================================================== */
+           
+        /* A4 Kağıdı Önizleme Efekti */
+        .a4-sayfa {
+            width: 210mm;
+            height: 297mm;
+            margin: 0 auto 2rem auto; /* Ekranda ortala ve alt boşluk bırak */
+            background-color: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); /* Kağıt Gölgelendirmesi */
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            page-break-after: always;
+        }
+
+        .yari-sayfa {
+            height: 148.5mm; 
+            width: 100%;
+            padding: 8mm 10mm; 
+            box-sizing: border-box;
+            display: flex;
+            align-items: stretch; 
+        }
+
+        /* Tablo Estetiği */
+        .kapak-tablosu { 
+            width: 100%; 
+            height: 100%; 
+            border-collapse: collapse; 
+            font-family: Arial, Helvetica, sans-serif;
+            text-align: center;
+            border: 2px solid black; 
+        }
+        
+        .kapak-tablosu th, .kapak-tablosu td { 
+            border: 1px solid black; 
+            padding: 2px 4px; 
+            font-size: 12px;
+            font-weight: bold;
+            color: black;
+        }
+
+        /* Gri Arka Planlar (Renklerin yazıcıda basılmasını zorla) */
+        .bg-gri {
+            background-color: #d9d9d9 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        /* Başlıklar ve Fontlar */
+        .baslik { 
+            font-family: 'Times New Roman', Times, serif;
+            padding: 10px 5px !important; 
+            line-height: 1.1;
+        }
+        .ders-isim {
+            display: block;
+            letter-spacing: -0.5px; 
+            margin-bottom: 2px;
+        }
+        .ogretmen-isim {
+            display: block;
+            font-size: 20px; 
+            font-weight: normal;
+            letter-spacing: 0;
+        }
+        .ogretmen-isim strong { font-weight: 900; }
+        
+        .alt-baslik { 
+            font-family: 'Times New Roman', Times, serif;
+            padding: 4px !important; 
+            letter-spacing: 1.5px;
+            line-height: 1.1;
+        }
+        .bep-baslik {
+            font-size: 16px;
+            font-weight: 900;
+            padding: 4px !important; 
+            letter-spacing: 1px;
+            line-height: 1.1;
+        }
+
+        /* Sütun Genişlikleri */
+        .sutun-sno { width: 6%; font-size: 13px; }
+        .sutun-ono { width: 10%; font-size: 13px;}
+        .sutun-adi { width: 34%; text-align: left !important; padding-left: 8px !important; }
+
+        /* ==========================================================
+           YAZDIRMA (PRINT) AYARLARI (Sadece yazdır tuşuna basılınca)
+           ========================================================== */
+        @media print {
+            @page { size: A4 portrait; margin: 0; }
+            
+            body { background: white; margin: 0; padding: 0; }
+            
+            /* Her şeyi gizle, sadece yazdırılacak alanı göster */
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            
+            #printArea { 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                width: 100%; 
+                margin: 0;
+                padding: 0;
+            }
+            
+            .no-print { display: none !important; }
+
+            /* Yazıcıda kağıt gölgesini ve kenar boşluğunu kaldır */
+            .a4-sayfa {
+                margin: 0;
+                box-shadow: none;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-200 p-6 font-sans">
+
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow-lg no-print relative mb-8">
+        
+        <!-- ÜST BİLGİ VE YÖNETİCİ BUTONU -->
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+            <h1 class="text-2xl font-bold text-blue-600">Yazılı Kapağı Otomasyonu</h1>
+            <div>
+                <button id="btnAdminGiris" onclick="adminGiris()" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 font-semibold py-1.5 px-4 rounded text-sm transition shadow-sm">Yönetici Girişi</button>
+                <button id="btnAdminCikis" onclick="adminCikis()" class="hidden bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 font-semibold py-1.5 px-4 rounded text-sm transition shadow-sm">Güvenli Çıkış</button>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- YÖNETİCİ (ADMIN) BÖLÜMÜ (Başlangıçta Gizli) -->
+        <!-- ========================================== -->
+        <div id="adminPanelleri" class="hidden">
+            
+            <div class="bg-red-50 text-red-600 text-xs font-bold p-3 mb-6 rounded text-center border border-red-200 shadow-inner">
+                ⚠️ Yetkili Yönetici Modundasınız. Yaptığınız tüm ekleme/silme işlemleri doğrudan veritabanına kaydedilir.
+            </div>
+
+            <div class="grid grid-cols-2 gap-6 mb-6">
+                <div class="border border-gray-200 p-4 rounded bg-gray-50 shadow-sm">
+                    <h2 class="font-bold mb-4 text-gray-800 border-b pb-2">1. Hızlı Veri Ekle</h2>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="yeniDers" placeholder="Ders Adı" class="border p-2 w-full text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
+                        <button onclick="veriEkle('yk_dersler', 'yeniDers')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded font-bold transition">+</button>
+                    </div>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="yeniOgretmen" placeholder="Öğretmen Adı" class="border p-2 w-full text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
+                        <button onclick="veriEkle('yk_ogretmenler', 'yeniOgretmen')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded font-bold transition">+</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="yeniSinif" placeholder="Sınıf Adı (Örn: 6-A)" class="border p-2 w-full text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-400">
+                        <button onclick="veriEkle('yk_siniflar', 'yeniSinif')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded font-bold transition">+</button>
+                    </div>
+                </div>
+
+                <div class="border border-gray-200 p-4 rounded bg-gray-50 shadow-sm">
+                    <h2 class="font-bold mb-4 text-gray-800 border-b pb-2">2. Öğretmen - Sınıf Ataması</h2>
+                    <select id="atamaDers" class="border p-2 w-full mb-3 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-400"><option>Ders Seç...</option></select>
+                    <select id="atamaSinif" class="border p-2 w-full mb-3 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-400"><option>Sınıf Seç...</option></select>
+                    <select id="atamaOgretmen" class="border p-2 w-full mb-4 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-400"><option>Öğretmen Seç...</option></select>
+                    <button onclick="atamaYap()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded w-full text-sm font-bold shadow-sm transition">Atamayı Kaydet</button>
+                </div>
+            </div>
+
+            <div class="border border-indigo-100 p-4 rounded bg-indigo-50 mb-6 shadow-sm">
+                <h2 class="font-bold mb-4 text-indigo-800 border-b border-indigo-200 pb-2">3. BEP'li Öğrenci İşlemleri</h2>
+                <div class="flex gap-4 mb-4">
+                    <select id="bepSinif" class="border border-indigo-200 p-2 rounded w-1/4 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"><option value="">Sınıf Seç...</option></select>
+                    <input type="text" id="bepOgrNo" placeholder="Öğrenci No" class="border border-indigo-200 p-2 rounded w-1/4 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                    <input type="text" id="bepOgrAd" placeholder="Adı Soyadı" class="border border-indigo-200 p-2 rounded w-2/4 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                    <button onclick="bepOgrencisiEkle()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded font-bold text-sm shadow transition">Ekle</button>
+                </div>
+                <h3 class="font-semibold text-sm text-gray-700 mb-2">Sisteme Kayıtlı BEP'li Öğrenciler</h3>
+                <ul id="listeBep" class="text-sm bg-white border border-indigo-100 rounded p-2 h-32 overflow-y-auto grid grid-cols-2 gap-x-6 gap-y-1"></ul>
+            </div>
+
+            <div class="border border-yellow-200 p-4 rounded bg-yellow-50 mb-6 shadow-sm">
+                <h2 class="font-bold mb-4 text-yellow-800 border-b border-yellow-200 pb-2">🎨 Tasarım ve Boyut Ayarları</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="flex flex-col gap-2">
+                        <span class="font-semibold text-sm text-gray-800">Ders Adı Görünümü</span>
+                        <div class="flex gap-2 items-center">
+                            <label class="text-xs text-gray-600">Boyut:</label>
+                            <input type="number" id="ayarDersBoyut" value="32" class="border border-yellow-300 p-1 w-16 text-sm rounded text-center focus:outline-none focus:ring-1 focus:ring-yellow-400" oninput="ayarlariUygula()"> <span class="text-xs">px</span>
+                            <label class="text-xs ml-2 text-gray-600">Kalınlık:</label>
+                            <select id="ayarDersKalinlik" class="border border-yellow-300 p-1 text-sm rounded focus:outline-none focus:ring-1 focus:ring-yellow-400" onchange="ayarlariUygula()">
+                                <option value="normal">Normal</option>
+                                <option value="bold">Kalın</option>
+                                <option value="900" selected>Ekstra Kalın</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <span class="font-semibold text-sm text-gray-800">Sınıf Adı Görünümü</span>
+                        <div class="flex gap-2 items-center">
+                            <label class="text-xs text-gray-600">Boyut:</label>
+                            <input type="number" id="ayarSinifBoyut" value="18" class="border border-yellow-300 p-1 w-16 text-sm rounded text-center focus:outline-none focus:ring-1 focus:ring-yellow-400" oninput="ayarlariUygula()"> <span class="text-xs">px</span>
+                            <label class="text-xs ml-2 text-gray-600">Kalınlık:</label>
+                            <select id="ayarSinifKalinlik" class="border border-yellow-300 p-1 text-sm rounded focus:outline-none focus:ring-1 focus:ring-yellow-400" onchange="ayarlariUygula()">
+                                <option value="normal">Normal</option>
+                                <option value="bold">Kalın</option>
+                                <option value="900" selected>Ekstra Kalın</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border border-emerald-200 p-4 rounded bg-emerald-50 mb-6 shadow-sm">
+                <h2 class="font-bold mb-4 text-emerald-800 border-b border-emerald-200 pb-2">4. Sisteme Kayıtlı Atamalar</h2>
+                
+                <div class="flex gap-4 mb-4 bg-emerald-100 p-3 rounded border border-emerald-200">
+                    <div class="w-1/3">
+                        <label class="block text-xs font-semibold text-emerald-900 mb-1">Ders Filtresi</label>
+                        <select id="filtreDers" onchange="atamaFiltrele('ders')" class="border border-emerald-300 p-2 w-full text-sm rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"><option value="">Tüm Dersler...</option></select>
+                    </div>
+                    <div class="w-1/3">
+                        <label class="block text-xs font-semibold text-emerald-900 mb-1">Öğretmen Filtresi</label>
+                        <select id="filtreOgretmen" onchange="atamaFiltrele('ogretmen')" class="border border-emerald-300 p-2 w-full text-sm rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"><option value="">Tüm Öğretmenler...</option></select>
+                    </div>
+                    <div class="w-1/3">
+                        <label class="block text-xs font-semibold text-emerald-900 mb-1">Sınıf Filtresi</label>
+                        <select id="filtreSinif" onchange="atamaFiltrele('sinif')" class="border border-emerald-300 p-2 w-full text-sm rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"><option value="">Tüm Sınıflar...</option></select>
+                    </div>
+                </div>
+
+                <ul id="listeAtamalar" class="text-sm bg-white border border-emerald-200 rounded p-2 h-48 overflow-y-auto grid grid-cols-2 gap-x-6 gap-y-1"></ul>
+            </div>
+
+            <div class="border border-gray-200 p-4 rounded bg-gray-50 mb-6 shadow-sm">
+                <h2 class="font-bold mb-4 text-gray-800 border-b pb-2">5. Kayıtlı Temel Veriler (Sil / Düzenle)</h2>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <h3 class="font-semibold text-sm text-gray-700 border-b border-gray-300 pb-1 mb-2">Eklenen Dersler</h3>
+                        <ul id="listeDersler" class="text-sm bg-white border border-gray-200 rounded p-2 h-32 overflow-y-auto shadow-inner"></ul>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-sm text-gray-700 border-b border-gray-300 pb-1 mb-2">Eklenen Öğretmenler</h3>
+                        <ul id="listeOgretmenler" class="text-sm bg-white border border-gray-200 rounded p-2 h-32 overflow-y-auto shadow-inner"></ul>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-sm text-gray-700 border-b border-gray-300 pb-1 mb-2">Eklenen Sınıflar</h3>
+                        <ul id="listeSiniflar" class="text-sm bg-white border border-gray-200 rounded p-2 h-32 overflow-y-auto shadow-inner"></ul>
+                    </div>
+                </div>
+            </div>
+            
+            <hr class="my-8 border-gray-300 border-dashed">
+        </div>
+        <!-- YÖNETİCİ BÖLÜMÜ BİTİŞ -->
+
+        <!-- ========================================== -->
+        <!-- HERKESE AÇIK (PUBLIC) YAZDIRMA BÖLÜMÜ -->
+        <!-- ========================================== -->
+        <div class="border border-blue-200 p-6 rounded-lg bg-blue-50 shadow-md">
+            <h2 class="text-xl font-bold mb-2 text-blue-800">Sınav Kağıdı Kapağı Yazdırma Paneli</h2>
+            <p class="text-sm text-blue-600 mb-5">Lütfen çıktı almak istediğiniz dersi seçin ve <b>Kapakları Hazırla</b> butonuna basın.</p>
+            <div class="flex gap-4">
+                <select id="yazdirDers" class="border border-blue-300 p-3 w-full rounded font-semibold text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"><option value="">Ders Seçiniz...</option></select>
+                <button onclick="kapaklariHazirla()" class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded font-bold whitespace-nowrap shadow-md transition">Kapakları Hazırla / Önizle</button>
+                <button onclick="window.print()" class="bg-gray-800 hover:bg-gray-900 text-white px-8 py-3 rounded font-bold shadow-md transition">Yazdır</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Yazdırılacak Alan (Önizleme İçin Ortalı) -->
+    <div id="printArea" class="flex flex-col items-center pb-12 w-full"></div>
+
+    <script>
+        // ==========================================
+        // YÖNETİCİ ŞİFRESİ
+        // ==========================================
+        const ADMIN_SIFRESI = "haskoy";
+
+        const supabaseUrl = 'https://dsiiujfqcrqochyutnsz.supabase.co';
+        const supabaseKey = 'sb_publishable_y8ImQZ7mMvcx0XgDd5_zAQ_UzMEludA';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+        let tumAtamalar = []; 
+        let tumDersler = [];
+        let tumSiniflar = [];
+        let tumOgretmenler = [];
+
+        async function init() { 
+            ayarlariUygula(); 
+            await verileriDoldur(); 
+        }
+
+        // --- YÖNETİCİ GİRİŞ/ÇIKIŞ İŞLEMLERİ ---
+        function adminGiris() {
+            const girilenSifre = prompt("Lütfen yönetici şifresini giriniz:");
+            if (girilenSifre === ADMIN_SIFRESI) {
+                document.getElementById('adminPanelleri').classList.remove('hidden');
+                document.getElementById('btnAdminGiris').classList.add('hidden');
+                document.getElementById('btnAdminCikis').classList.remove('hidden');
+            } else if (girilenSifre !== null) {
+                alert("Hatalı şifre girdiniz!");
+            }
+        }
+
+        function adminCikis() {
+            document.getElementById('adminPanelleri').classList.add('hidden');
+            document.getElementById('btnAdminGiris').classList.remove('hidden');
+            document.getElementById('btnAdminCikis').classList.add('hidden');
+            alert("Güvenli çıkış yapıldı.");
+        }
+
+        function ayarlariUygula() {
+            const dersBoyut = document.getElementById('ayarDersBoyut').value;
+            const dersKalinlik = document.getElementById('ayarDersKalinlik').value;
+            const sinifBoyut = document.getElementById('ayarSinifBoyut').value;
+            const sinifKalinlik = document.getElementById('ayarSinifKalinlik').value;
+            
+            let styleTag = document.getElementById('dinamikTasarimAyarlari');
+            if(!styleTag) {
+                styleTag = document.createElement('style');
+                styleTag.id = 'dinamikTasarimAyarlari';
+                document.head.appendChild(styleTag);
+            }
+            
+            styleTag.innerHTML = `
+                .ders-isim { font-size: ${dersBoyut}px !important; font-weight: ${dersKalinlik} !important; }
+                .alt-baslik { font-size: ${sinifBoyut}px !important; font-weight: ${sinifKalinlik} !important; }
+            `;
+        }
+
+        async function verileriDoldur() {
+            const { data: dersler } = await supabaseClient.from('yk_dersler').select('*').order('ad');
+            const { data: siniflar } = await supabaseClient.from('yk_siniflar').select('*').order('ad');
+            const { data: ogretmenler } = await supabaseClient.from('yk_ogretmenler').select('*').order('ad_soyad');
+            const { data: bepOgrencileri } = await supabaseClient.from('yk_bep_ogrencileri').select('*, yk_siniflar(ad)').order('sinif_id');
+            const { data: atamaListesi } = await supabaseClient.from('yk_atamalar')
+                .select(`id, ders_id, sinif_id, ogretmen_id, yk_dersler(ad), yk_siniflar(ad), yk_ogretmenler(ad_soyad)`);
+
+            tumDersler = dersler || [];
+            tumSiniflar = siniflar || [];
+            tumOgretmenler = ogretmenler || [];
+            tumAtamalar = atamaListesi || [];
+
+            doldurSelect('atamaDers', tumDersler, 'ad'); 
+            doldurSelect('yazdirDers', tumDersler, 'ad');
+            doldurSelect('atamaSinif', tumSiniflar, 'ad'); 
+            doldurSelect('bepSinif', tumSiniflar, 'ad');
+            doldurSelect('atamaOgretmen', tumOgretmenler, 'ad_soyad');
+
+            filtreleriGuncelle('hepsi');
+
+            listeyiEkranaBas('listeDersler', tumDersler, 'ad', 'yk_dersler');
+            listeyiEkranaBas('listeOgretmenler', tumOgretmenler, 'ad_soyad', 'yk_ogretmenler');
+            listeyiEkranaBas('listeSiniflar', tumSiniflar, 'ad', 'yk_siniflar');
+            
+            bepListesiniEkranaBas(bepOgrencileri); 
+            atamaFiltrele('baslangic');
+        }
+
+        function doldurSelect(id, data, textKey, defaultText = 'Seçiniz...', seciliDeger = '') {
+            const el = document.getElementById(id); 
+            el.innerHTML = `<option value="">${defaultText}</option>`;
+            if(data) { 
+                data.forEach(item => { 
+                    const selected = item.id == seciliDeger ? 'selected' : '';
+                    el.innerHTML += `<option value="${item.id}" ${selected}>${item[textKey]}</option>`; 
+                }); 
+            }
+        }
+
+        function filtreleriGuncelle(tetikleyen) {
+            const seciliDers = document.getElementById('filtreDers').value;
+            const seciliSinif = document.getElementById('filtreSinif').value;
+            const seciliOgretmen = document.getElementById('filtreOgretmen').value;
+
+            let gecerliAtamalar = tumAtamalar;
+            if (seciliDers) gecerliAtamalar = gecerliAtamalar.filter(a => a.ders_id == seciliDers);
+            if (seciliSinif) gecerliAtamalar = gecerliAtamalar.filter(a => a.sinif_id == seciliSinif);
+            if (seciliOgretmen) gecerliAtamalar = gecerliAtamalar.filter(a => a.ogretmen_id == seciliOgretmen);
+
+            const aktifDersler = tumDersler.filter(d => gecerliAtamalar.some(a => a.ders_id == d.id) || d.id == seciliDers);
+            const aktifSiniflar = tumSiniflar.filter(s => gecerliAtamalar.some(a => a.sinif_id == s.id) || s.id == seciliSinif);
+            const aktifOgretmenler = tumOgretmenler.filter(o => gecerliAtamalar.some(a => a.ogretmen_id == o.id) || o.id == seciliOgretmen);
+
+            if(tetikleyen !== 'ders') doldurSelect('filtreDers', aktifDersler, 'ad', 'Tüm Dersler...', seciliDers);
+            if(tetikleyen !== 'sinif') doldurSelect('filtreSinif', aktifSiniflar, 'ad', 'Tüm Sınıflar...', seciliSinif);
+            if(tetikleyen !== 'ogretmen') doldurSelect('filtreOgretmen', aktifOgretmenler, 'ad_soyad', 'Tüm Öğretmenler...', seciliOgretmen);
+        }
+
+        function atamaFiltrele(tetikleyen) {
+            if(tetikleyen !== 'baslangic') { filtreleriGuncelle(tetikleyen); }
+
+            const dersId = document.getElementById('filtreDers').value;
+            const sinifId = document.getElementById('filtreSinif').value;
+            const ogretmenId = document.getElementById('filtreOgretmen').value;
+
+            let filtrelenmis = tumAtamalar.filter(atama => {
+                const dersSart = dersId ? atama.ders_id == dersId : true;
+                const sinifSart = sinifId ? atama.sinif_id == sinifId : true;
+                const ogretmenSart = ogretmenId ? atama.ogretmen_id == ogretmenId : true;
+                return dersSart && sinifSart && ogretmenSart;
+            });
+
+            filtrelenmis.sort((a, b) => {
+                const dersA = a.yk_dersler ? a.yk_dersler.ad : '';
+                const dersB = b.yk_dersler ? b.yk_dersler.ad : '';
+                const dersKarsilastirma = dersA.localeCompare(dersB);
+                if (dersKarsilastirma !== 0) return dersKarsilastirma;
+                
+                const sinifA = a.yk_siniflar ? a.yk_siniflar.ad : '';
+                const sinifB = b.yk_siniflar ? b.yk_siniflar.ad : '';
+                return sinifA.localeCompare(sinifB);
+            });
+
+            atamaListesiniEkranaBas(filtrelenmis);
+        }
+
+        function listeyiEkranaBas(elementId, data, textKey, tableName) {
+            const el = document.getElementById(elementId); el.innerHTML = '';
+            if(data) {
+                data.forEach(item => {
+                    el.innerHTML += `
+                    <li class="flex justify-between items-center border-b border-gray-100 py-1 hover:bg-gray-100 px-2 rounded transition">
+                        <span class="text-gray-700">${item[textKey]}</span>
+                        <div class="flex gap-2">
+                            <button onclick="veriDuzenle('${tableName}', ${item.id}, '${item[textKey]}', '${textKey}')" class="text-blue-500 font-bold cursor-pointer hover:bg-blue-100 px-2 rounded transition" title="Düzenle">✎</button>
+                            <button onclick="veriSil('${tableName}', ${item.id})" class="text-red-500 font-bold cursor-pointer hover:bg-red-100 px-2 rounded transition" title="Sil">&times;</button>
+                        </div>
+                    </li>`;
+                });
+            }
+        }
+
+        function bepListesiniEkranaBas(data) {
+            const el = document.getElementById('listeBep'); el.innerHTML = '';
+            if(data) {
+                data.forEach(item => {
+                    const sinifAdi = item.yk_siniflar ? item.yk_siniflar.ad : 'Bilinmeyen Sınıf';
+                    el.innerHTML += `
+                    <li class="flex justify-between items-center border-b border-gray-100 py-1 hover:bg-gray-50 px-2 rounded transition">
+                        <span><strong class="text-gray-800">${sinifAdi}</strong> - <span class="text-gray-600">${item.ogrenci_no}</span> - <span class="text-gray-700">${item.ad_soyad}</span></span>
+                        <button onclick="veriSil('yk_bep_ogrencileri', ${item.id})" class="text-red-500 font-bold cursor-pointer px-2 hover:bg-red-100 rounded transition" title="Sil">&times;</button>
+                    </li>`;
+                });
+            }
+        }
+
+        function atamaListesiniEkranaBas(data) {
+            const el = document.getElementById('listeAtamalar'); el.innerHTML = '';
+            if(data) {
+                data.forEach(item => {
+                    const dersAdi = item.yk_dersler ? item.yk_dersler.ad : '-';
+                    const sinifAdi = item.yk_siniflar ? item.yk_siniflar.ad : '-';
+                    const ogrAdi = item.yk_ogretmenler ? item.yk_ogretmenler.ad_soyad : '-';
+                    
+                    el.innerHTML += `
+                    <li class="flex justify-between items-center border-b border-gray-100 py-1.5 hover:bg-emerald-50 px-2 rounded transition">
+                        <div class="flex flex-col">
+                            <span class="text-blue-700 font-bold text-xs mb-0.5">${dersAdi} <span class="text-gray-500 font-normal">(${sinifAdi})</span></span>
+                            <span class="text-gray-600 font-medium text-xs flex items-center gap-1">
+                                <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"></path></svg>
+                                ${ogrAdi}
+                            </span>
+                        </div>
+                        <button onclick="veriSil('yk_atamalar', ${item.id})" class="text-red-500 font-bold cursor-pointer px-2 hover:bg-red-100 rounded transition" title="Sil">&times;</button>
+                    </li>`;
+                });
+            }
+        }
+
+        async function veriEkle(tablo, inputId) {
+            const val = document.getElementById(inputId).value;
+            if (!val) return alert("Metin girin!");
+            const alanAd = tablo === 'yk_ogretmenler' ? 'ad_soyad' : 'ad';
+            await supabaseClient.from(tablo).insert([{ [alanAd]: val }]);
+            document.getElementById(inputId).value = ''; init(); 
+        }
+
+        async function bepOgrencisiEkle() {
+            const sinif_id = document.getElementById('bepSinif').value;
+            const ogr_no = document.getElementById('bepOgrNo').value;
+            const ad_soyad = document.getElementById('bepOgrAd').value;
+            if (!sinif_id || !ogr_no || !ad_soyad) return alert("Tüm bilgileri girin!");
+            await supabaseClient.from('yk_bep_ogrencileri').insert([{ sinif_id, ogrenci_no: ogr_no, ad_soyad }]);
+            document.getElementById('bepOgrNo').value = ''; document.getElementById('bepOgrAd').value = ''; init(); 
+        }
+
+        async function veriDuzenle(tablo, id, eskiDeger, alanAd) {
+            const yeniDeger = prompt("Lütfen yeni ismi girin:", eskiDeger);
+            if (yeniDeger && yeniDeger.trim() !== "" && yeniDeger !== eskiDeger) {
+                await supabaseClient.from(tablo).update({ [alanAd]: yeniDeger.trim() }).eq('id', id); init();
+            }
+        }
+
+        async function veriSil(tablo, id) {
+            if(confirm("Silmek istediğinize emin misiniz?")) { await supabaseClient.from(tablo).delete().eq('id', id); init(); }
+        }
+
+        async function atamaYap() {
+            const ders_id = document.getElementById('atamaDers').value;
+            const sinif_id = document.getElementById('atamaSinif').value;
+            const ogretmen_id = document.getElementById('atamaOgretmen').value;
+            if(!ders_id || !sinif_id || !ogretmen_id) return alert("Seçimleri yapın.");
+            const { error } = await supabaseClient.from('yk_atamalar').insert([{ ders_id, sinif_id, ogretmen_id }]);
+            if(error) return alert("Atama Yapılamadı! Zaten atanmış olabilir."); init();
+        }
+
+        async function kapakHtmlUret(atama) {
+            const dersAd = atama.yk_dersler.ad;
+            const ogretmenAd = atama.yk_ogretmenler.ad_soyad;
+            const sinifAd = atama.yk_siniflar.ad;
+            
+            const { data: bepList } = await supabaseClient.from('yk_bep_ogrencileri').select('*').eq('sinif_id', atama.yk_siniflar.id);
+
+            let bepSatirlari = '';
+            for(let i=0; i<2; i++) {
+                let ogr1 = bepList && bepList[i*2] ? bepList[i*2] : {ogrenci_no: '', ad_soyad: ''};
+                let ogr2 = bepList && bepList[(i*2)+1] ? bepList[(i*2)+1] : {ogrenci_no: '', ad_soyad: ''};
+                bepSatirlari += `
+                    <tr>
+                        <td class="sutun-sno">${i*2+1}</td><td class="sutun-ono">${ogr1.ogrenci_no}</td><td class="sutun-adi">${ogr1.ad_soyad}</td>
+                        <td class="sutun-sno">${i*2+2}</td><td class="sutun-ono">${ogr2.ogrenci_no}</td><td class="sutun-adi">${ogr2.ad_soyad}</td>
+                    </tr>`;
+            }
+
+            let gelmeyenSatirlari = '';
+            for(let i=0; i<4; i++) {
+                gelmeyenSatirlari += `
+                    <tr>
+                        <td class="sutun-sno">${i*2+1}</td><td class="sutun-ono"></td><td class="sutun-adi"></td>
+                        <td class="sutun-sno">${i*2+2}</td><td class="sutun-ono"></td><td class="sutun-adi"></td>
+                    </tr>`;
+            }
+
+            return `
+                <div class="yari-sayfa">
+                    <table class="kapak-tablosu">
+                        <tr>
+                            <td colspan="6" class="baslik">
+                                <span class="ders-isim">${dersAd.toUpperCase()}</span>
+                                <span class="ogretmen-isim">(ÖĞRETMEN: <strong>${ogretmenAd.toUpperCase()}</strong>)</span>
+                            </td>
+                        </tr>
+                        <tr><td colspan="6" class="alt-baslik bg-gri">${sinifAd.toUpperCase()} SINIFI</td></tr>
+                        <tr><td colspan="6" class="bep-baslik bg-gri">BEP'Lİ ÖĞRENCİLER</td></tr>
+                        <tr class="bg-gri">
+                            <th class="sutun-sno">S.NO</th><th class="sutun-ono">O.NO</th><th class="sutun-adi">ADI SOYADI</th>
+                            <th class="sutun-sno">S.NO</th><th class="sutun-ono">O.NO</th><th class="sutun-adi">ADI SOYADI</th>
+                        </tr>
+                        ${bepSatirlari}
+                        <tr><td colspan="6" class="bep-baslik bg-gri">GELMEYEN ÖĞRENCİLER</td></tr>
+                        <tr class="bg-gri">
+                            <th class="sutun-sno">S.NO</th><th class="sutun-ono">O.NO</th><th class="sutun-adi">ADI SOYADI</th>
+                            <th class="sutun-sno">S.NO</th><th class="sutun-ono">O.NO</th><th class="sutun-adi">ADI SOYADI</th>
+                        </tr>
+                        ${gelmeyenSatirlari}
+                    </table>
+                </div>
+            `;
+        }
+
+        async function kapaklariHazirla() {
+            const ders_id = document.getElementById('yazdirDers').value;
+            if(!ders_id) return alert("Lütfen yazdırılacak dersi seçin!");
+
+            const { data: atamalar, error: atamaErr } = await supabaseClient.from('yk_atamalar')
+                .select(`id, yk_dersler(ad), yk_siniflar(id, ad), yk_ogretmenler(ad_soyad)`)
+                .eq('ders_id', ders_id); 
+
+            if (!atamalar || atamalar.length === 0) return alert("Atama bulunamadı!");
+
+            atamalar.sort((a, b) => {
+                const sinifA = a.yk_siniflar ? a.yk_siniflar.ad : '';
+                const sinifB = b.yk_siniflar ? b.yk_siniflar.ad : '';
+                return sinifA.localeCompare(sinifB);
+            });
+
+            const printArea = document.getElementById('printArea');
+            let sayfaHtml = '';
+            
+            for (let i = 0; i < atamalar.length; i += 2) {
+                sayfaHtml += `<div class="a4-sayfa">`;
+                sayfaHtml += await kapakHtmlUret(atamalar[i]);
+                if (atamalar[i+1]) { sayfaHtml += await kapakHtmlUret(atamalar[i+1]); } 
+                else { sayfaHtml += `<div class="yari-sayfa"></div>`; }
+                sayfaHtml += `</div>`;
+            }
+            
+            printArea.innerHTML = sayfaHtml;
+            
+            // Kullanıcıyı önizlemeyi görmesi için sayfanın altına kaydır
+            setTimeout(() => {
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }, 300);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

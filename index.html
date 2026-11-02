@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Sayfa başlığı artık JavaScript ile dinamik olarak güncellenecek -->
     <title id="sayfaBasligi">Sınav Kağıdı Kapağı Sistemi</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -12,18 +11,6 @@
            GENEL VE CANLI ÖNİZLEME TASARIMI (Ekranda görünen kısım)
            ========================================================== */
            
-        /* Üst Paneli Sayfaya Sabitleme (Sticky) Özelliği */
-        .sabit-panel {
-            position: sticky;
-            top: 0;
-            z-index: 50; /* Diğer her şeyin üstünde kalsın */
-            background-color: #f3f4f6; /* Sayfa arka plan rengiyle aynı */
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #e5e7eb;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
         /* A4 Kağıdı Önizleme Efekti */
         .a4-sayfa {
             width: 210mm;
@@ -137,12 +124,12 @@
         }
     </style>
 </head>
-<body class="bg-gray-200 font-sans">
+<body class="bg-gray-200 p-6 font-sans">
 
-    <!-- SABİT KONTROL PANELİ (SAYFAYLA KAYACAK ALAN) -->
-    <div class="sabit-panel px-6 no-print">
-        <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow-lg">
-            
+    <!-- NORMAL SAYFA İÇERİĞİ -->
+    <div class="max-w-4xl mx-auto px-6 mt-4 no-print">
+        
+        <div class="bg-white p-6 rounded shadow-lg mb-8">
             <div class="flex justify-between items-center mb-6 border-b pb-4">
                 <h1 class="text-2xl font-bold text-blue-600">Yazılı Kapağı Otomasyonu</h1>
                 <div>
@@ -161,12 +148,8 @@
                     <button onclick="yazdirVeBaslikGuncelle()" class="bg-gray-800 hover:bg-gray-900 text-white px-8 py-3 rounded font-bold shadow-md transition">Yazdır</button>
                 </div>
             </div>
-
         </div>
-    </div>
 
-    <!-- NORMAL SAYFA İÇERİĞİ -->
-    <div class="max-w-4xl mx-auto px-6 mt-4 no-print">
         <!-- ========================================== -->
         <!-- YÖNETİCİ (ADMIN) BÖLÜMÜ (Başlangıçta Gizli) -->
         <!-- ========================================== -->
@@ -312,6 +295,7 @@
             await verileriDoldur(); 
         }
 
+        // --- YÖNETİCİ GİRİŞ/ÇIKIŞ İŞLEMLERİ ---
         function adminGiris() {
             const girilenSifre = prompt("Lütfen yönetici şifresini giriniz:");
             if (girilenSifre === ADMIN_SIFRESI) {
@@ -487,7 +471,7 @@
                                 ${ogrAdi}
                             </span>
                         </div>
-                        <button onclick="veriSil('yk_atamalar', ${item.id})" class="text-red-500 font-bold cursor-pointer px-2 hover:bg-red-100 rounded transition" title="Sil">&times;</button>
+                        <button onclick="veriSil('yk_atamalar', ${item.id})" class="text-red-500 font-bold cursor-pointer px-2 hover:text-red-700" title="Sil">&times;</button>
                     </li>`;
                 });
             }
@@ -630,22 +614,17 @@
                 return;
             }
             
-            // Seçili dersin adını al (Dropdown menüsündeki görünen metin)
             const dersAdi = dersSelect.options[dersSelect.selectedIndex].text;
             
-            // Eğer ekranda henüz kapaklar hazırlanmamışsa (printArea boşsa), önce kapakları hazırla
             const printArea = document.getElementById('printArea');
             if (printArea.innerHTML.trim() === '') {
                 await kapaklariHazirla();
             }
             
-            // Tarayıcının sekme başlığını seçili ders adı ile değiştir (PDF adı bu olacak)
             document.getElementById('sayfaBasligi').innerText = dersAdi + " - Sınav Kapakları";
             
-            // Yazdırma diyaloğunu çağır
             window.print();
             
-            // Yazdırma işlemi bittikten hemen sonra sekme adını eski haline döndür
             setTimeout(() => {
                 document.getElementById('sayfaBasligi').innerText = "Sınav Kağıdı Kapağı Sistemi";
             }, 1000);
